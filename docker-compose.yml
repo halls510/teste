@@ -1,0 +1,57 @@
+version: '3.7'
+
+services:
+  traefik:
+    image: traefik:v2.5
+    container_name: traefik
+    restart: always
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.zerossl.acme.email=halls510@hotmail.com
+      - --certificatesresolvers.zerossl.acme.storage=/acme.json
+      - --certificatesresolvers.zerossl.acme.tlschallenge=true
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./acme.json:/acme.json"
+      - "./traefik.yml:/traefik.yml:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`mail.sistemaglobal.com.br`)"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.tls.certresolver=zerossl"
+
+  mailcow:
+    image: mailcow/mailcow:latest
+    container_name: mailcow
+    restart: always
+    depends_on:
+      - traefik
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - MAILCOW_HOSTNAME=mail.sistemaglobal.com.br
+      - TZ=America/Sao_Paulo
+      - DEPLOY_PATH=/mailcow
+      - SOFT_QUOTA=
+      - HARD_QUOTA=
+      - HTTP_PORT=8080
+      - HTTP_BIND=127.0.0.1
+      - HTTP_PROXY=http://traefik
+      - HTTPS_PORT=8443
+      - HTTPS_BIND=127.0.0.1
+      - HTTPS_PROXY=https://traefik
+    volumes:
+      - "/opt/mailcow/data:/data:rw,Z"
+      - "/opt/mailcow/letsencrypt:/etc/letsencrypt:ro,Z"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mailcow.rule=Host(`mail.sistemaglobal.com.br`)"
+      - "traefik.http.routers.mailcow.entrypoints=websecure"
+      - "traefik.http.routers.mailcow.tls=true"
+      - "traefik.http.routers.mailcow.tls.certresolver=zerossl"

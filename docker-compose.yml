@@ -1,57 +1,53 @@
-version: '3.7'
+version: '3'
 
 services:
   traefik:
-    image: traefik:v2.5
-    container_name: traefik
-    restart: always
+    image: traefik:v2.4
     command:
-      - --api.insecure=true
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.websecure.address=:443
-      - --certificatesresolvers.zerossl.acme.email=halls510@hotmail.com
-      - --certificatesresolvers.zerossl.acme.storage=/acme.json
-      - --certificatesresolvers.zerossl.acme.tlschallenge=true
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.email=halls510@hotmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge.delaybeforecheck=0"
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "./acme.json:/acme.json"
-      - "./traefik.yml:/traefik.yml:ro"
+      - "./traefik/letsencrypt:/letsencrypt"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`mail.sistemaglobal.com.br`)"
-      - "traefik.http.routers.traefik.tls=true"
-      - "traefik.http.routers.traefik.tls.certresolver=zerossl"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.nicoledepaula.adv.br`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)"
+      - "traefik.http.routers.http-catchall.entrypoints=web"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+      - "traefik.http.routers.http-catchall.tls=false"
 
-  mailcow:
-    image: mailcow/mailcow:latest
-    container_name: mailcow
-    restart: always
-    depends_on:
-      - traefik
+  swag:
+    image: ghcr.io/linuxserver/swag
+    container_name: swag
+    restart: unless-stopped
     environment:
       - PUID=1000
       - PGID=1000
-      - MAILCOW_HOSTNAME=mail.sistemaglobal.com.br
       - TZ=America/Sao_Paulo
-      - DEPLOY_PATH=/mailcow
-      - SOFT_QUOTA=
-      - HARD_QUOTA=
-      - HTTP_PORT=8080
-      - HTTP_BIND=127.0.0.1
-      - HTTP_PROXY=http://traefik
-      - HTTPS_PORT=8443
-      - HTTPS_BIND=127.0.0.1
-      - HTTPS_PROXY=https://traefik
+      - URL=traefik.nicoledepaula.adv.br
+      - SUBDOMAINS=
+      - VALIDATION=dns
+      - DNSPLUGIN=cloudflare
+      - EMAIL=halls510@hotmail.com
+      - CERTPROVIDER=zerossl
     volumes:
-      - "/opt/mailcow/data:/data:rw,Z"
-      - "/opt/mailcow/letsencrypt:/etc/letsencrypt:ro,Z"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.mailcow.rule=Host(`mail.sistemaglobal.com.br`)"
-      - "traefik.http.routers.mailcow.entrypoints=websecure"
-      - "traefik.http.routers.mailcow.tls=true"
-      - "traefik.http.routers.mailcow.tls.certresolver=zerossl"
+      - ./swag/config:/config
+      - ./swag/acme:/etc/acme.sh
+      - /var/run/docker.sock:/var/run/docker.sock:ro      
